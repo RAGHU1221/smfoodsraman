@@ -156,10 +156,10 @@ public class MainActivity extends AppCompatActivity {
 
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState);
-        } else if (isOnline()) {
-            webView.loadUrl(APP_URL);
         } else {
-            webView.loadUrl("file:///android_asset/offline.html");
+            // Always try the site — the Service Worker serves cached pages offline.
+            // If SW isn't registered yet, onReceivedError falls back to the asset page.
+            webView.loadUrl(APP_URL);
         }
     }
 
