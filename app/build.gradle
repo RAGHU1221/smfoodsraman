@@ -20,6 +20,20 @@ android {
             storePassword "smfoods2026"
             keyAlias "smfoods"
             keyPassword "smfoods2026"
+            enableV1Signing true
+            enableV2Signing true
+            enableV3Signing true
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            signingConfig signingConfigs.release
+        }
+        debug {
+            signingConfig signingConfigs.release
         }
     }
 
