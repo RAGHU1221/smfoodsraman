@@ -1,0 +1,48 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    compileSdk 34
+    namespace 'com.srimuruganfoods.pos'
+
+    defaultConfig {
+        applicationId "com.srimuruganfoods.pos"
+        minSdk 24
+        targetSdk 34
+        versionCode 3
+        versionName "2.2.0"
+    }
+
+    signingConfigs {
+        release {
+            storeFile rootProject.file("smfoods-release.keystore")
+            storePassword "smfoods2026"
+            keyAlias "smfoods"
+            keyPassword "smfoods2026"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+        }
+        debug {
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    implementation 'com.google.android.material:material:1.11.0'
+}
