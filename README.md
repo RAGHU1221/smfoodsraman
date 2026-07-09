@@ -14,7 +14,7 @@ Open `app/src/main/java/com/srimuruganfoods/pos/MainActivity.java` and set your
 live URL (line ~44):
 
 ```java
-private static final String APP_URL = "https://YOUR-SUBDOMAIN.infinityfreeapp.com/";
+private static final String APP_URL = "https://smfoods.site.je/";
 ```
 
 ---
