@@ -2,6 +2,7 @@ package com.srimuruganfoods.pos;
 
 import android.annotation.SuppressLint;
 import android.app.DownloadManager;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.net.ConnectivityManager;
@@ -10,6 +11,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.provider.MediaStore;
 import android.util.Base64;
 import android.view.View;
 import android.webkit.CookieManager;
@@ -25,10 +27,12 @@ import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.FileProvider;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -39,6 +43,7 @@ public class MainActivity extends AppCompatActivity {
     //  ★★★ CHANGE ONLY THIS LINE — your live InfinityFree URL ★★★
     // ══════════════════════════════════════════════════════════
     private static final String APP_URL = "https://smfoods.site.je/";
+
     private static final int FILE_CHOOSER_CODE = 101;
 
     private WebView webView;
@@ -172,35 +177,112 @@ public class MainActivity extends AppCompatActivity {
                "fr.readAsDataURL(b);});})();";
     }
 
-    /** Saves base64 blob data (jsPDF bills, SheetJS exports) to Downloads. */
+    /** JS bridge: save / open / share PDFs and other blob exports. */
     public class BlobDownloader {
+
+        /** Legacy entry — jsPDF blob via DownloadListener. Saves + opens. */
         @JavascriptInterface
         public void save(String base64, String mimeType) {
-            try {
-                String ext = ".bin";
-                if (mimeType != null) {
-                    if (mimeType.contains("pdf")) ext = ".pdf";
-                    else if (mimeType.contains("sheet") || mimeType.contains("excel")) ext = ".xlsx";
-                    else if (mimeType.contains("csv")) ext = ".csv";
-                    else if (mimeType.contains("png")) ext = ".png";
-                }
-                String name = "SMFoods_" +
-                        new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ext;
-                byte[] data = Base64.decode(base64, Base64.DEFAULT);
-
-                File dir = Build.VERSION.SDK_INT >= 29
-                        ? getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-                        : Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                if (dir != null && !dir.exists()) dir.mkdirs();
-                File out = new File(dir, name);
-                try (FileOutputStream fos = new FileOutputStream(out)) { fos.write(data); }
-
-                runOnUiThread(() ->
-                        Toast.makeText(MainActivity.this, "Saved: " + name, Toast.LENGTH_LONG).show());
-            } catch (Exception e) {
-                runOnUiThread(() ->
-                        Toast.makeText(MainActivity.this, "Save failed", Toast.LENGTH_SHORT).show());
+            String ext = ".bin";
+            if (mimeType != null) {
+                if (mimeType.contains("pdf")) ext = ".pdf";
+                else if (mimeType.contains("sheet") || mimeType.contains("excel")) ext = ".xlsx";
+                else if (mimeType.contains("csv")) ext = ".csv";
+                else if (mimeType.contains("png")) ext = ".png";
             }
+            String name = "SMFoods_" +
+                    new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date()) + ext;
+            saveAndOpen(base64, name, mimeType == null ? "application/octet-stream" : mimeType);
+        }
+
+        /** Save PDF to public Downloads/SMFoods and open it in a PDF viewer. */
+        @JavascriptInterface
+        public void savePdf(String base64, String fileName) {
+            saveAndOpen(base64, safeName(fileName, ".pdf"), "application/pdf");
+        }
+
+        /** Open Android share sheet with the actual PDF file attached (WhatsApp etc.). */
+        @JavascriptInterface
+        public void sharePdf(String base64, String fileName, String message) {
+            try {
+                File f = writeToCache(base64, safeName(fileName, ".pdf"));
+                Uri uri = FileProvider.getUriForFile(MainActivity.this,
+                        "com.srimuruganfoods.pos.fileprovider", f);
+                Intent send = new Intent(Intent.ACTION_SEND);
+                send.setType("application/pdf");
+                send.putExtra(Intent.EXTRA_STREAM, uri);
+                if (message != null && !message.isEmpty())
+                    send.putExtra(Intent.EXTRA_TEXT, message);
+                send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                startActivity(Intent.createChooser(send, "Share Bill PDF"));
+            } catch (Exception e) {
+                toast("Share failed");
+            }
+        }
+
+        /** Lets the web page detect the native bridge version. */
+        @JavascriptInterface
+        public int version() { return 2; }
+
+        // ── internals ─────────────────────────────────────────
+
+        private String safeName(String n, String ext) {
+            if (n == null || n.trim().isEmpty())
+                n = "SMFoods_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
+            n = n.replaceAll("[^A-Za-z0-9._-]", "_");
+            if (!n.toLowerCase(Locale.US).endsWith(ext)) n += ext;
+            return n;
+        }
+
+        private File writeToCache(String base64, String name) throws Exception {
+            byte[] data = Base64.decode(base64, Base64.DEFAULT);
+            File dir = new File(getCacheDir(), "pdfs");
+            if (!dir.exists()) dir.mkdirs();
+            File out = new File(dir, name);
+            try (FileOutputStream fos = new FileOutputStream(out)) { fos.write(data); }
+            return out;
+        }
+
+        private void saveAndOpen(String base64, String name, String mime) {
+            try {
+                byte[] data = Base64.decode(base64, Base64.DEFAULT);
+                Uri openUri;
+
+                if (Build.VERSION.SDK_INT >= 29) {
+                    // Public Downloads/SMFoods via MediaStore — visible in Files app
+                    ContentValues cv = new ContentValues();
+                    cv.put(MediaStore.Downloads.DISPLAY_NAME, name);
+                    cv.put(MediaStore.Downloads.MIME_TYPE, mime);
+                    cv.put(MediaStore.Downloads.RELATIVE_PATH,
+                            Environment.DIRECTORY_DOWNLOADS + "/SMFoods");
+                    openUri = getContentResolver()
+                            .insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+                    if (openUri == null) throw new Exception("MediaStore insert failed");
+                    try (OutputStream os = getContentResolver().openOutputStream(openUri)) {
+                        os.write(data);
+                    }
+                } else {
+                    // API 24–28: cache + FileProvider (still opens/shares fine)
+                    File f = writeToCache(base64, name);
+                    openUri = FileProvider.getUriForFile(MainActivity.this,
+                            "com.srimuruganfoods.pos.fileprovider", f);
+                }
+
+                toast("Saved: Downloads/SMFoods/" + name);
+
+                Intent view = new Intent(Intent.ACTION_VIEW);
+                view.setDataAndType(openUri, mime);
+                view.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                try { startActivity(view); }
+                catch (Exception noViewer) { /* no PDF viewer installed — file is still saved */ }
+            } catch (Exception e) {
+                toast("Save failed");
+            }
+        }
+
+        private void toast(String msg) {
+            runOnUiThread(() ->
+                    Toast.makeText(MainActivity.this, msg, Toast.LENGTH_LONG).show());
         }
     }
 
