@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../constants/app_constants.dart';
 
@@ -30,11 +31,20 @@ class ApiClient {
   }) async {
     try {
       final uri = Uri.parse('${AppConstants.API_URL}/$endpoint');
+      if (kDebugMode) {
+        debugPrint('[API POST] URL: $uri');
+        debugPrint('[API POST] Body: ${jsonEncode(body)}');
+      }
       final res = await _client.post(
         uri,
         headers: _headers(token),
         body: jsonEncode(body),
       ).timeout(AppConstants.CONNECT_TIMEOUT);
+
+      if (kDebugMode) {
+        debugPrint('[API POST] Status: ${res.statusCode}');
+        debugPrint('[API POST] Raw body: ${res.body}');
+      }
 
       return _parseResponse(res);
     } on SocketException {
@@ -72,12 +82,25 @@ class ApiClient {
   }
 
   static Map<String, dynamic> _parseResponse(http.Response res) {
-    final body = res.body.trim();
+    // Strip BOM and whitespace defensively before any checks
+    var body = res.body;
+    if (body.isNotEmpty && body.codeUnitAt(0) == 0xFEFF) {
+      body = body.substring(1); // strip UTF-8 BOM if present
+    }
+    body = body.trim();
+
+    if (body.isEmpty) {
+      throw ApiException(
+        'Empty response from server (HTTP ${res.statusCode})',
+        res.statusCode,
+      );
+    }
 
     // Detect HTML error response
-    if (body.startsWith('<') || body.startsWith('<!')) {
+    if (body.startsWith('<')) {
+      final preview = body.length > 120 ? body.substring(0, 120) : body;
       throw ApiException(
-        'Server error (${res.statusCode}). Contact administrator.',
+        'Server returned HTML instead of JSON (HTTP ${res.statusCode}): $preview',
         res.statusCode,
       );
     }
@@ -86,7 +109,8 @@ class ApiClient {
     try {
       json = jsonDecode(body) as Map<String, dynamic>;
     } catch (e) {
-      throw ApiException('Invalid JSON response: $body', res.statusCode);
+      final preview = body.length > 120 ? body.substring(0, 120) : body;
+      throw ApiException('Invalid JSON response: $preview', res.statusCode);
     }
 
     // Check success
