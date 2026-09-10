@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace "com.srimuruganfoods.pos"
-    compileSdk flutter.compileSdkVersion
+    compileSdk 34
     ndkVersion flutter.ndkVersion
 
     compileOptions {
@@ -21,7 +21,7 @@ android {
     defaultConfig {
         applicationId "com.srimuruganfoods.pos"
         minSdkVersion 21
-        targetSdkVersion flutter.targetSdkVersion
+        targetSdkVersion 34
         versionCode 3
         versionName "3.0.0"
     }
