@@ -1,0 +1,49 @@
+name: smfoods_pos
+description: Sri Murugan Foods POS
+publish_to: 'none'
+version: 3.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: '>=3.10.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State
+  provider: ^6.1.1
+
+  # Local DB
+  sqflite: ^2.3.0
+  path: ^1.8.3
+
+  # Network
+  http: ^1.1.0
+  connectivity_plus: ^5.0.2
+
+  # Storage
+  shared_preferences: ^2.2.2
+
+  # UI
+  google_fonts: ^6.1.0
+  flutter_animate: ^4.3.0
+  gap: ^3.0.1
+  badges: ^3.1.2
+
+  # Background sync
+  workmanager: ^0.5.2
+
+  # Utils
+  intl: ^0.18.1
+  uuid: ^4.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
